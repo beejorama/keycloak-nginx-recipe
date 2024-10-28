@@ -25,7 +25,7 @@ Create the following file: `etc/nginx/conf.d/{your domain}.conf`, replacing `{yo
 
 Paste the following into it, again, replacing the `{your domain}` placeholder.
 
-```
+```bash
 server {
     listen          443 ssl;
     server_name     {your domain};
@@ -43,20 +43,23 @@ server {
 }
 ```
 
-## Install certbot
+## Install and run certbot
 Note - when I used certbot I used the `--standalone` argument, however I believe using the `--nginx` argument would be better in conjunction with `certonly`, as we don't want certbot to alter our nginx configuration.
 
 https://www.digitalocean.com/community/tutorials/how-to-secure-nginx-with-let-s-encrypt-on-rocky-linux-9
 
-## Install openjdk
-This is required for the Keycloak bare-metal installation.
+## Install Keycloak
+https://www.keycloak.org/getting-started/getting-started-zip
 
-```
+OpenJDK is required for the Keycloak bare-metal installation.
+
+```bash
 sudo dnf install java-21-openjdk.x86_64
 ```
 
-## Download keycloak, copy and unzip to /opt
-```
+Then download and unzip the Keycloak package to `/opt`.
+
+```bash
 cd /opt
 curl https://github.com/keycloak/keycloak/releases/download/26.0.2/keycloak-26.0.2.zip -O -J -L
 sudo dnf install unzip
@@ -68,8 +71,12 @@ Various threads asking for help have answers where they suggest using 744 permis
 
 In my first installation I ended up using 744 on archive (recursively) and live/{your domain}
 
-## Update /opt/keycloak-26.0.2/conf/keycloak.conf
-```
+## Update keycloak.conf
+Replace the `{your domain}` placeholder at the bottom of the file.
+
+```bash
+# /opt/keycloak-26.0.2/conf/keycloak.conf
+
 # Adapted the sample production config file.
 
 # Database
@@ -102,7 +109,7 @@ Keycloak documentation suggests various ways of declaring the credentials, howev
 
 Replace `{username}` and `{password}` in the following snippet with the credentials you want to use.
 
-```
+```bash
 sudo export KC_BOOTSTRAP_ADMIN_USERNAME={username}
 sudo export KC_BOOTSTRAP_ADMIN_PASSWORD={password}
 ```
@@ -112,7 +119,7 @@ We have got our required configuration in the `/opt/keycloak-26.0.2/conf/keycloa
 
 I have opted to build Keycloak before running it, which is supposed to reduce the startup time. This doesn't matter too much given this is a single node instance and it's only being used for a small user base.
 
-```
+```bash
 # Build then run
 sudo /opt/keycloak-26.0.2/bin/kc.sh build
 sudo /opt/keycloak-26.0.2/bin/kc.sh start --optimized

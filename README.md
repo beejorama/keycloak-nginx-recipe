@@ -1,129 +1,35 @@
 # keycloak-nginx-recipe
-Instructions on how to manually install and configure Keycloak, nginx and certbot on Rocky Linux 9.
 
-These instructions are based on using a 1 CPU, 1GB memory VM running on Digital Ocean.
+> ### Warning - script is functional but not polished
+>
+> 1. Does not use `firewalld` due to memory issues while testing on a different cloud provider, so firewall settings must be done in the cloud portal
+> 1. A small amount of manual input is required, e.g. providing an email address to LetsEncrypt
+> 1. No validation on the arguments
+> 1. No error handling
+> 1. Permissions may be too open on LetsEncrypt certificate folders
 
-**To do:**
-- Run Keycloak as a service
-- Add steps to create permanent admin user and delete temporary user
-- Update nginx config to only expose admin endpoints to a limited source IP
-- Investigate certificate permission requirements
+This script installs and configures Keycloak 26.0.5, with nginx acting as a reverse proxy and with certbot retrieving free SSL certificates from LetsEncrypt. The aim of the script was to make it easy to get an authentication server up and running in the cloud for personal projects with minimal cost.
 
-## Set up initial server config
-https://www.digitalocean.com/community/tutorials/initial-server-setup-with-rocky-linux-9
+The script has been run on an EC2 VM running Amazon Linux 2023 with 1 CPU and 1GB memory.
 
-## Set up enhanced metrics
-https://docs.digitalocean.com/products/monitoring/how-to/install-agent/
+If you try to run this script with a different distro you may encounter issues, for example when trying to run it on Rocky 9 some of the packages needed `epel-release` installed in order to access them.
 
-## Install nginx
-https://www.digitalocean.com/community/tutorials/how-to-install-nginx-on-rocky-linux-9
+## Requirements
+For the script to work the following must be met:
+1. Port 80 is free and open to the internet (required by certbot to verify domain ownership)
+1. Port 443 is free for nginx to use
+1. You must be able to use `sudo`
 
-Note - this includes installing and configuring firewalld. Add http and https to permanent list.
 
-## Configure nginx
-Create the following file: `etc/nginx/conf.d/{your domain}.conf`, replacing `{your domain}` with your actual domain (e.g. example.com).
+## How to run
 
-Paste the following into it, again, replacing the `{your domain}` placeholder.
-
-```bash
-server {
-    listen          443 ssl;
-    server_name     {your domain};
-
-	# sets the SSL certs to use
-    ssl_certificate         /etc/letsencrypt/live/{your domain}/fullchain.pem;
-    ssl_certificate_key     /etc/letsencrypt/live/{your domain}/privkey.pem;
-
-    location / {
-        # sets the headers which are needed for keycloak to construct the correct redirect URLs
-        proxy_set_header        X-Forwarded-For $remote_addr;
-        proxy_set_header        Host $http_host;
-        proxy_pass              https://0.0.0.0:8443;
-    }
-}
-```
-
-## Install and run certbot
-Note - when I used certbot I used the `--standalone` argument, however I believe using the `--nginx` argument would be better in conjunction with `certonly`, as we don't want certbot to alter our nginx configuration.
-
-https://www.digitalocean.com/community/tutorials/how-to-secure-nginx-with-let-s-encrypt-on-rocky-linux-9
-
-## Install Keycloak
-https://www.keycloak.org/getting-started/getting-started-zip
-
-OpenJDK is required for the Keycloak bare-metal installation.
+Copy the script into a file and run the following, replacing the parameters with your own.
 
 ```bash
-sudo dnf install java-21-openjdk.x86_64
+sudo sh keycloak-setup.sh example.domain.com admin password
 ```
 
-Then download and unzip the Keycloak package to `/opt`.
-
-```bash
-cd /opt
-curl https://github.com/keycloak/keycloak/releases/download/26.0.2/keycloak-26.0.2.zip -O -J -L
-sudo dnf install unzip
-unzip keycloak-26.0.2.zip
-```
-
-## Update permissions on LetsEncrypt certificate folders (need to confirm if this is needed)
-Various threads asking for help have answers where they suggest using 744 permissions on the certificates. I still need to confirm whether this is necessary.
-
-In my first installation I ended up using 744 on archive (recursively) and live/{your domain}
-
-## Update keycloak.conf
-Replace the `{your domain}` placeholder at the bottom of the file.
-
-```bash
-# /opt/keycloak-26.0.2/conf/keycloak.conf
-
-# Adapted the sample production config file.
-
-# Database
-# Use dev-file for small, single node instance.
-db=dev-file
-
-# Observability
-# If the server should expose healthcheck and metric endpoints.
-#health-enabled=true
-#metrics-enabled=true
-
-# HTTP
-# The file path to a server certificate or certificate chain in PEM format.
-https-certificate-file=/etc/letsencrypt/live/{your domain}/fullchain.pem
-
-# The file path to a private key in PEM format.
-https-certificate-key-file=/etc/letsencrypt/live/{your domain}/privkey.pem
-
-# Proxy settings
-proxy-headers=xforwarded
-
-# Hostname for the Keycloak server.
-hostname={your domain}
-```
-
-## Add environment variables for temp admin user
-When you first start Keycloak it creates a temporary admin user in order to set up fully. This is only intended to be a temporary admin user, and should be removed as soon as the user has created a more permanent admin user.
-
-Keycloak documentation suggests various ways of declaring the credentials, however it's easy enough to add them as environment variables.
-
-Replace `{username}` and `{password}` in the following snippet with the credentials you want to use.
-
-```bash
-sudo export KC_BOOTSTRAP_ADMIN_USERNAME={username}
-sudo export KC_BOOTSTRAP_ADMIN_PASSWORD={password}
-```
-
-## Build and run Keycloak
-We have got our required configuration in the `/opt/keycloak-26.0.2/conf/keycloak.conf` and our temporary admin credentials in the environment variables. We are ready to run Keycloak.
-
-I have opted to build Keycloak before running it, which is supposed to reduce the startup time. This doesn't matter too much given this is a single node instance and it's only being used for a small user base.
-
-```bash
-# Build then run
-sudo /opt/keycloak-26.0.2/bin/kc.sh build
-sudo /opt/keycloak-26.0.2/bin/kc.sh start --optimized
-
-# Alternatively build every time we run
-sudo /opt/keycloak-26.0.2/bin/kc.sh start
-```
+### Parameters
+1. The (sub)domain
+1. The bootstrapped admin user for Keycloak
+1. The bootstrapped admin password for Keycloak
